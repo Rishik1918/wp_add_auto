@@ -130,9 +130,14 @@
       <div class="table-header">
         <h2>Invite Links ({{ invites|length }})</h2>
         {% if invites %}
-        <form method="POST" action="/admin/clear-used" onsubmit="return confirm('Are you sure you want to delete all already-used links?');">
-          <button type="submit" class="btn btn-sm btn-secondary">Clear Used Links</button>
-        </form>
+        <div style="display: flex; gap: 8px;">
+          <form method="POST" action="/admin/clear-used" onsubmit="return confirm('Are you sure you want to delete all already-used links?');">
+            <button type="submit" class="btn btn-sm btn-secondary">Clear Used Links</button>
+          </form>
+          <form method="POST" action="/admin/delete-all" onsubmit="return confirm('Are you sure you want to delete ALL links from the database?');">
+            <button type="submit" class="btn btn-sm btn-danger">Delete All Links</button>
+          </form>
+        </div>
         {% endif %}
       </div>
 

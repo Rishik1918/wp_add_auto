@@ -261,6 +261,16 @@ def delete_link(token):
     flash("Link deleted.")
     return redirect(url_for("admin_dashboard"))
 
+# PROTECTED DELETE ALL
+@app.route("/admin/delete-all", methods=["POST"])
+@admin_required
+def delete_all():
+    with get_db() as conn:
+        conn.execute("DELETE FROM invites")
+        conn.commit()
+    flash("All invite links have been deleted.")
+    return redirect(url_for("admin_dashboard"))
+
 # PROTECTED CLEAR USED
 @app.route("/admin/clear-used", methods=["POST"])
 @admin_required
