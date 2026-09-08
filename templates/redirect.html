@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Join WhatsApp Group</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+    body { background-color: #0c1317; color: #e9edef; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
+    
+    .card {
+      background: #111b21;
+      border-radius: 20px;
+      padding: 40px 32px;
+      max-width: 460px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.5);
+      border: 1px solid #222e35;
+    }
+
+    .icon-wrapper {
+      width: 72px;
+      height: 72px;
+      background: #25d366;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 18px;
+      box-shadow: 0 0 20px rgba(37, 211, 102, 0.3);
+    }
+    
+    .icon-wrapper svg {
+      width: 38px;
+      height: 38px;
+      fill: white;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #1a3c2c;
+      color: #25d366;
+      font-size: 13px;
+      padding: 6px 14px;
+      border-radius: 20px;
+      margin-bottom: 18px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+    }
+
+    h1 {
+      font-size: 24px;
+      margin-bottom: 10px;
+      color: #e9edef;
+      font-weight: 700;
+    }
+
+    p.subtitle {
+      font-size: 14px;
+      color: #8696a0;
+      line-height: 1.5;
+      margin-bottom: 28px;
+    }
+
+    .actions {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      padding: 14px 20px;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 15px;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      border: 1px solid transparent;
+      cursor: pointer;
+    }
+
+    /* Primary WhatsApp App Button */
+    .btn-primary {
+      background-color: #00a884;
+      color: #ffffff;
+    }
+    .btn-primary:hover {
+      background-color: #06cf9c;
+      transform: translateY(-1px);
+    }
+
+    /* Clear, High-Contrast Web/Laptop Button */
+    .btn-secondary {
+      background-color: #202c33;
+      color: #e9edef;
+      border: 1px solid #3b4a54;
+    }
+    .btn-secondary:hover {
+      background-color: #2a3942;
+      border-color: #53bdeb;
+      color: #53bdeb;
+      transform: translateY(-1px);
+    }
+
+    .divider {
+      display: flex;
+      align-items: center;
+      text-align: center;
+      margin: 8px 0;
+      color: #667781;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .divider::before, .divider::after {
+      content: '';
+      flex: 1;
+      border-bottom: 1px solid #222e35;
+    }
+    .divider::before { margin-right: 12px; }
+    .divider::after { margin-left: 12px; }
+
+    .status-note {
+      font-size: 12px;
+      color: #667781;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon-wrapper">
+      <svg viewBox="0 0 24 24">
+        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+      </svg>
+    </div>
+
+    <div class="badge">&#10003; One-Time Invite Verified</div>
+    <h1>Join WhatsApp Group</h1>
+    <p class="subtitle">Your one-time invitation has been verified. Choose how you would like to open WhatsApp:</p>
+
+    <div class="actions">
+      <!-- Button 1: App Deep Link -->
+      <a id="appBtn" href="{{ deep_link }}" class="btn btn-primary">
+        <span>&#128241;</span> Open in WhatsApp App
+      </a>
+
+      <div class="divider">or</div>
+
+      <!-- Button 2: High-contrast WhatsApp Web Button -->
+      <a id="webBtn" href="https://web.whatsapp.com/accept?code={{ code }}" target="_blank" class="btn btn-secondary">
+        <span>&#128187;</span> Open in WhatsApp Web (Browser)
+      </a>
+    </div>
+
+    <div class="status-note" id="statusNote">Attempting to open WhatsApp app automatically...</div>
+  </div>
+
+  <script>
+    // Mask address bar immediately so token and URL disappear from browser history
+    if (window.history && window.history.replaceState) {
+      window.history.replaceState(null, '', '/verified');
+    }
+
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const deepLink = "{{ deep_link }}";
+
+    // On mobile, auto-trigger the app protocol
+    if (isMobile) {
+      try {
+        window.location.href = deepLink;
+      } catch(e) {}
+    } else {
+      // On laptops/desktops, update note
+      document.getElementById('statusNote').textContent = "Click 'WhatsApp Web' if you are on a laptop browser.";
+    }
+  </script>
+</body>
+</html>

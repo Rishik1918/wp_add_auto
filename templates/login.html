@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Login - WhatsApp Gateway</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+    body { background-color: #0c1317; color: #e9edef; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
+    .card { background: #111b21; border-radius: 16px; padding: 36px 28px; max-width: 400px; width: 100%; box-shadow: 0 10px 30px rgba(0,0,0,0.4); border: 1px solid #222e35; }
+    h1 { font-size: 20px; margin-bottom: 20px; text-align: center; color: #25d366; }
+    label { display: block; font-size: 13px; color: #8696a0; margin-bottom: 6px; }
+    input[type="password"] { width: 100%; background: #202c33; border: 1px solid #2a3942; border-radius: 8px; padding: 12px 14px; color: #e9edef; font-size: 14px; margin-bottom: 18px; outline: none; }
+    input:focus { border-color: #00a884; }
+    .btn { width: 100%; background: #00a884; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: 600; font-size: 15px; cursor: pointer; transition: background 0.2s; }
+    .btn:hover { background: #06cf9c; }
+    .flash { background: #3b2225; border: 1px solid #ea4335; color: #f28b82; padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>&#128274; Admin Access</h1>
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        {% for message in messages %}
+          <div class="flash">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+    <form method="POST" action="/admin/login">
+      <label>Enter Admin Password:</label>
+      <input type="password" name="password" placeholder="Password" required autofocus>
+      <button type="submit" class="btn">Log In to Dashboard</button>
+    </form>
+  </div>
+</body>
+</html>
