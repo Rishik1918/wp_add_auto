@@ -31,21 +31,45 @@ app = Flask(__name__)
 app.secret_key = secrets.token_hex(24)
 
 def load_config():
-    if not os.path.exists(CONFIG_FILE):
-        default_cfg = {
-            "whatsapp_group_link": "https://chat.whatsapp.com/YOUR_INVITE_CODE",
-            "base_url": "http://localhost:5000",
-            "admin_password": "admin"
-        }
-        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-            json.dump(default_cfg, f, indent=2)
-        return default_cfg
-    with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+    cfg = {
+        "whatsapp_group_link": "https://chat.whatsapp.com/DssbuREdX2jIpGqa1evZ5v?s=cl&p=a&mlu=4&ilr=4",
+        "base_url": "https://wp-add-auto.onrender.com",
+        "admin_password": os.environ.get("ADMIN_PASSWORD") or "admin"
+    }
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT key, value FROM settings")
+            rows = cursor.fetchall()
+            for row in rows:
+                cfg[row["key"]] = row["value"]
+    except Exception as e:
+        print("Error loading config from SQLite:", e)
+    
+    # Environment variable overrides if specified in Render dashboard
+    if os.environ.get("ADMIN_PASSWORD"):
+        cfg["admin_password"] = os.environ.get("ADMIN_PASSWORD")
+    if os.environ.get("BASE_URL"):
+        cfg["base_url"] = os.environ.get("BASE_URL")
+    return cfg
 
 def save_config(cfg):
-    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump(cfg, f, indent=2)
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
+            for k, v in cfg.items():
+                cursor.execute("""
+                    INSERT INTO settings (key, value) VALUES (?, ?)
+                    ON CONFLICT(key) DO UPDATE SET value=excluded.value
+                """, (k, str(v)))
+            conn.commit()
+    except Exception as e:
+        print("Error saving config to SQLite:", e)
+    try:
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, indent=2)
+    except Exception:
+        pass
 
 def get_db():
     conn = sqlite3.connect(DB_FILE)
@@ -63,6 +87,12 @@ def init_db():
                 used_at TEXT,
                 ip_address TEXT,
                 created_at TEXT
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
             )
         """)
         conn.commit()
@@ -121,17 +151,51 @@ def join_group(token):
 def admin_login():
     cfg = load_config()
     actual_pw = cfg.get("admin_password", "admin")
+    env_pw = os.environ.get("ADMIN_PASSWORD")
 
     if request.method == "POST":
-        entered_pw = request.form.get("password", "")
-        if entered_pw == actual_pw:
+        entered_pw = request.form.get("password", "").strip()
+        # Accept saved password, env password, or fallback "admin"
+        if entered_pw == actual_pw or (env_pw and entered_pw == env_pw) or entered_pw == "admin":
             session["admin_authenticated"] = True
             flash("Welcome to the Admin Dashboard!")
             return redirect(url_for("admin_dashboard"))
         else:
-            flash("Incorrect admin password. Please try again.")
+            flash("Incorrect password. If you forgot your password, click 'Forgot / Reset Password' below.")
 
     return render_template("login.html")
+
+@app.route("/admin/reset-password", methods=["GET", "POST"])
+def reset_password():
+    master_key = os.environ.get("RESET_KEY", "reset123")
+
+    if request.method == "POST":
+        entered_key = request.form.get("reset_key", "").strip()
+        new_pw = request.form.get("new_password", "").strip()
+        confirm_pw = request.form.get("confirm_password", "").strip()
+
+        if entered_key != master_key:
+            flash("Incorrect Master Reset Key. Please use 'reset123'.")
+            return render_template("reset_password.html")
+
+        if not new_pw:
+            flash("New password cannot be empty.")
+            return render_template("reset_password.html")
+
+        if new_pw != confirm_pw:
+            flash("New passwords do not match. Please re-enter.")
+            return render_template("reset_password.html")
+
+        # Save to persistent SQLite
+        cfg = load_config()
+        cfg["admin_password"] = new_pw
+        save_config(cfg)
+
+        session["admin_authenticated"] = True
+        flash("Password successfully reset! You are now logged in.")
+        return redirect(url_for("admin_dashboard"))
+
+    return render_template("reset_password.html")
 
 # ADMIN LOGOUT
 @app.route("/admin/logout")
