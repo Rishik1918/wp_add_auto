@@ -107,6 +107,22 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+BOT_USER_AGENTS = [
+    "facebookexternalhit", "whatsapp", "telegrambot", "twitterbot",
+    "slackbot", "discordbot", "applebot", "googlebot", "bingbot",
+    "yandex", "baiduspider", "duckduckbot", "linkedinbot", "embedly",
+    "quora link preview", "showyoubot", "outbrain", "pinterest", "vkshare"
+]
+
+def is_bot_or_prefetch():
+    ua = (request.headers.get("User-Agent") or "").lower()
+    if any(b in ua for b in BOT_USER_AGENTS):
+        return True
+    purpose = (request.headers.get("X-Purpose") or request.headers.get("Purpose") or request.headers.get("Sec-Purpose") or "").lower()
+    if "preview" in purpose or "prefetch" in purpose:
+        return True
+    return False
+
 # PUBLIC HOME ROUTE - Shows simple safe page, NEVER the links!
 @app.route("/")
 def index():
@@ -118,6 +134,14 @@ def join_group(token):
     cfg = load_config()
     group_link = cfg.get("whatsapp_group_link", "").strip()
     client_ip = request.headers.get("CF-Connecting-IP") or request.headers.get("X-Forwarded-For", request.remote_addr)
+    if client_ip and "," in client_ip:
+        client_ip = client_ip.split(",")[0].strip()
+
+    # If crawler/bot generating preview, return preview without burning token
+    if is_bot_or_prefetch():
+        code = extract_invite_code(group_link)
+        deep_link = f"whatsapp://chat?code={code}" if code else group_link
+        return render_template("redirect.html", group_url=group_link, deep_link=deep_link, code=code)
 
     with get_db() as conn:
         cursor = conn.cursor()
@@ -128,19 +152,32 @@ def join_group(token):
             return render_template("invalid.html"), 404
 
         if invite["is_used"]:
-            return render_template("expired.html", used_at=invite["used_at"]), 410
+            # Grace period: allow SAME IP to reload or complete join within 15 minutes
+            is_same_ip = bool(invite["ip_address"] and invite["ip_address"] == client_ip)
+            within_grace = False
+            if is_same_ip and invite["used_at"]:
+                try:
+                    used_dt = datetime.strptime(invite["used_at"], "%Y-%m-%d %H:%M:%S")
+                    if (datetime.now() - used_dt).total_seconds() < 900:
+                        within_grace = True
+                except Exception:
+                    pass
 
-        # Mark as used atomically
-        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        cursor.execute("""
-            UPDATE invites 
-            SET is_used = 1, used_at = ?, ip_address = ? 
-            WHERE token = ? AND is_used = 0
-        """, (now_str, client_ip, token))
-        conn.commit()
+            if not within_grace:
+                return render_template("expired.html", used_at=invite["used_at"]), 410
 
-        if cursor.rowcount == 0:
-            return render_template("expired.html", used_at=now_str), 410
+        else:
+            # Mark as used atomically on first real human access
+            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            cursor.execute("""
+                UPDATE invites 
+                SET is_used = 1, used_at = ?, ip_address = ? 
+                WHERE token = ? AND is_used = 0
+            """, (now_str, client_ip, token))
+            conn.commit()
+
+            if cursor.rowcount == 0:
+                return render_template("expired.html", used_at=now_str), 410
 
     code = extract_invite_code(group_link)
     deep_link = f"whatsapp://chat?code={code}" if code else group_link
