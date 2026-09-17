@@ -32,8 +32,8 @@ app.secret_key = secrets.token_hex(24)
 
 def load_config():
     cfg = {
-        "whatsapp_group_link": "https://chat.whatsapp.com/DssbuREdX2jIpGqa1evZ5v?s=cl&p=a&mlu=4&ilr=4",
-        "base_url": "https://wp-add-auto.onrender.com",
+        "whatsapp_group_link": os.environ.get("WHATSAPP_GROUP_LINK") or "https://chat.whatsapp.com/JvimDEP8FrQHOlicdDCEXX",
+        "base_url": os.environ.get("BASE_URL") or "https://wp-add-auto.onrender.com",
         "admin_password": os.environ.get("ADMIN_PASSWORD") or "admin"
     }
     try:
@@ -46,11 +46,13 @@ def load_config():
     except Exception as e:
         print("Error loading config from SQLite:", e)
     
-    # Environment variable overrides if specified in Render dashboard
-    if os.environ.get("ADMIN_PASSWORD"):
-        cfg["admin_password"] = os.environ.get("ADMIN_PASSWORD")
+    # Environment variable overrides (highest priority across container reboots)
+    if os.environ.get("WHATSAPP_GROUP_LINK"):
+        cfg["whatsapp_group_link"] = os.environ.get("WHATSAPP_GROUP_LINK").strip()
     if os.environ.get("BASE_URL"):
-        cfg["base_url"] = os.environ.get("BASE_URL")
+        cfg["base_url"] = os.environ.get("BASE_URL").strip().rstrip("/")
+    if os.environ.get("ADMIN_PASSWORD"):
+        cfg["admin_password"] = os.environ.get("ADMIN_PASSWORD").strip()
     return cfg
 
 def save_config(cfg):
@@ -211,8 +213,8 @@ def admin_login():
 
     if request.method == "POST":
         entered_pw = request.form.get("password", "").strip()
-        # Accept saved password, env password, or fallback "admin"
-        if entered_pw == actual_pw or (env_pw and entered_pw == env_pw) or entered_pw == "admin":
+        expected_pw = (env_pw or actual_pw or "admin").strip()
+        if entered_pw and entered_pw == expected_pw:
             session["admin_authenticated"] = True
             flash("Welcome to the Admin Dashboard!")
             return redirect(url_for("admin_dashboard"))
