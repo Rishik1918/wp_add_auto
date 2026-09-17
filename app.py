@@ -4,7 +4,7 @@ import sqlite3
 import secrets
 from functools import wraps
 from datetime import datetime
-from flask import Flask, render_template, request, redirect, url_for, flash, Response, session
+from flask import Flask, render_template, request, redirect, url_for, flash, Response, session, make_response
 import io
 import csv
 import re
@@ -86,9 +86,14 @@ def init_db():
                 is_used INTEGER DEFAULT 0,
                 used_at TEXT,
                 ip_address TEXT,
-                created_at TEXT
+                created_at TEXT,
+                device_id TEXT
             )
         """)
+        try:
+            conn.execute("ALTER TABLE invites ADD COLUMN device_id TEXT")
+        except Exception:
+            pass
         conn.execute("""
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
@@ -143,6 +148,11 @@ def join_group(token):
         deep_link = f"whatsapp://chat?code={code}" if code else group_link
         return render_template("redirect.html", group_url=group_link, deep_link=deep_link, code=code)
 
+    cookie_name = f"dev_token_{token}"
+    client_device_id = request.cookies.get(cookie_name)
+    now = datetime.now()
+    now_str = now.strftime("%Y-%m-%d %H:%M:%S")
+
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM invites WHERE token = ?", (token,))
@@ -151,14 +161,20 @@ def join_group(token):
         if not invite:
             return render_template("invalid.html"), 404
 
+        code = extract_invite_code(group_link)
+        deep_link = f"whatsapp://chat?code={code}" if code else group_link
+
         if invite["is_used"]:
-            # Grace period: allow SAME IP to reload or complete join within 15 minutes
-            is_same_ip = bool(invite["ip_address"] and invite["ip_address"] == client_ip)
+            # Strict Single-Device Lock:
+            # ONLY the exact device/browser that has the secret device cookie AND is within 15 minutes can access!
+            # Any second device on the same Wi-Fi, hotspot, or network has no cookie and is rejected immediately.
+            is_same_device = bool(client_device_id and invite["device_id"] and client_device_id == invite["device_id"])
             within_grace = False
-            if is_same_ip and invite["used_at"]:
+
+            if is_same_device and invite["used_at"]:
                 try:
                     used_dt = datetime.strptime(invite["used_at"], "%Y-%m-%d %H:%M:%S")
-                    if (datetime.now() - used_dt).total_seconds() < 900:
+                    if (now - used_dt).total_seconds() < 900:  # 15 min window
                         within_grace = True
                 except Exception:
                     pass
@@ -166,22 +182,25 @@ def join_group(token):
             if not within_grace:
                 return render_template("expired.html", used_at=invite["used_at"]), 410
 
+            # Exact same device reloading within 15 mins: allow them through
+            return render_template("redirect.html", group_url=group_link, deep_link=deep_link, code=code)
+
         else:
-            # Mark as used atomically on first real human access
-            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            # First human visit on first device: issue unique secret device token
+            new_device_id = secrets.token_hex(16)
             cursor.execute("""
                 UPDATE invites 
-                SET is_used = 1, used_at = ?, ip_address = ? 
+                SET is_used = 1, used_at = ?, ip_address = ?, device_id = ? 
                 WHERE token = ? AND is_used = 0
-            """, (now_str, client_ip, token))
+            """, (now_str, client_ip, new_device_id, token))
             conn.commit()
 
             if cursor.rowcount == 0:
                 return render_template("expired.html", used_at=now_str), 410
 
-    code = extract_invite_code(group_link)
-    deep_link = f"whatsapp://chat?code={code}" if code else group_link
-    return render_template("redirect.html", group_url=group_link, deep_link=deep_link, code=code)
+            resp = make_response(render_template("redirect.html", group_url=group_link, deep_link=deep_link, code=code))
+            resp.set_cookie(cookie_name, new_device_id, max_age=900, httponly=True, samesite="Lax")
+            return resp
 
 # ADMIN LOGIN
 @app.route("/admin/login", methods=["GET", "POST"])
